@@ -1,0 +1,10 @@
+
+> interview-platform@1.0.0 auth
+> npm run dev --prefix services/auth-service
+
+
+> auth-service@1.0.0 dev
+> node --watch server.js
+
+[auth-service] Connected to SQL Server
+[auth-service] Listening on http://localhost:4000

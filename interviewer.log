@@ -1,0 +1,73 @@
+
+> interview-platform@1.0.0 interviewer
+> npm run dev --prefix services/interviewer-service
+
+
+> interviewer-service@1.0.0 dev
+> node --watch server.js
+
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001
+Restarting 'server.js'
+[interviewer-service] Connected to SQL Server
+[interviewer-service] Listening on http://localhost:4001

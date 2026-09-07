@@ -1,0 +1,1198 @@
+This is a very suitable application for React + Node.js + SQL Server, and I would recommend building it as two initial microservices rather than making the system unnecessarily complicated.
+
+One important point first: the SQL Server password you posted is a real credential-looking value. Do not commit it to GitHub or put it in React code. Keep it only in .env on the server, and rotate it if it is an active production credential.
+
+1. Recommended Architecture
+
+I would structure the application like this:
+
+                    ┌──────────────────────┐
+                    │      React App       │
+                    │   Interview Portal   │
+                    │      Port 5173       │
+                    └──────────┬───────────┘
+                               │
+                               │ HTTP / REST
+                               ▼
+              ┌────────────────────────────────┐
+              │        Node.js Services        │
+              └────────────────────────────────┘
+                         │              │
+              ┌──────────▼──────┐ ┌────▼──────────────┐
+              │ Auth Service    │ │ Interviewer       │
+              │ Port 4000       │ │ Service Port 4001 │
+              │                 │ │                   │
+              │ Login           │ │ Candidates        │
+              │ JWT             │ │ Questions         │
+              │ Users           │ │ Assign Questions  │
+              │ Roles           │ │ Interview Session │
+              └────────┬────────┘ │ Answers/Scores    │
+                       │          └─────────┬─────────┘
+                       │                    │
+                       └──────────┬─────────┘
+                                  ▼
+                         ┌──────────────────┐
+                         │   SQL Server     │
+                         │  CreateInterview │
+                         │     Database     │
+                         └──────────────────┘
+
+For your first version, I recommend:
+
+Component	Port	Responsibility
+React	5173	UI
+Auth Service	4000	Login, JWT, users, roles
+Interviewer Service	4001	Candidates, questions, assignments, interview
+SQL Server	1433/instance	Database
+
+Later, if the application grows, we can split:
+
+Candidate Service
+Question Service
+Interview Service
+Reporting Service
+Notification Service
+
+But don't split them now. Two services are enough for the first production version.
+
+2. Two User Types
+
+You have exactly two roles:
+
+INTERVIEWER
+CANDIDATE
+Interviewer
+
+Can:
+
+Login
+View candidates
+Select candidate
+Start interview
+See questions assigned to that candidate
+Ask questions
+Add questions
+Edit questions
+Delete/deactivate questions
+Assign questions to candidates
+Enter candidate answers
+Score candidate
+Add comments
+Complete interview
+View interview history
+Candidate
+
+Can:
+
+Login
+See their interview
+See questions when interviewer asks them
+Optionally enter written answers
+Cannot see expected answers
+Cannot edit questions
+Cannot see other candidates
+Cannot see interviewer scoring
+3. Important Design Decision — Questions Should Not Simply Belong to Candidates
+
+I recommend not storing:
+
+Question
+CandidateId
+
+inside the question itself.
+
+Instead:
+
+Questions
+     │
+     │
+     ▼
+CandidateQuestionAssignments
+     │
+     ▼
+Candidates
+
+This allows the same question to be reused.
+
+For example:
+
+Q001 → Kishore
+Q001 → Sunil
+Q001 → Nanthini
+
+while still allowing:
+
+Q005 → only Kishore
+
+This is important because you have common questions + candidate-specific questions.
+
+4. Database Design
+
+Create:
+
+CreateInterviewDB
+
+I recommend these main tables.
+
+Users
+Users
+-------------------------
+UserId
+Username
+PasswordHash
+FullName
+Role
+Email
+IsActive
+CreatedAt
+UpdatedAt
+
+Role:
+
+INTERVIEWER
+CANDIDATE
+Candidates
+Candidates
+-------------------------
+CandidateId
+UserId
+CandidateName
+Email
+Phone
+Position
+ResumePath
+Status
+CreatedAt
+UpdatedAt
+Questions
+Questions
+-------------------------
+QuestionId
+QuestionCode
+QuestionText
+QuestionType
+Category
+Difficulty
+ExpectedAnswer
+WeakAnswer
+IsCommon
+CreatedBy
+IsActive
+CreatedAt
+UpdatedAt
+
+For your current questions:
+
+Category:
+Python
+PostgreSQL
+Data Pipeline
+API
+System Design
+RLS
+Problem Solving
+Communication
+GenAI
+
+Difficulty:
+
+Easy
+Medium
+Tough
+CandidateQuestionAssignments
+CandidateQuestionAssignments
+--------------------------------
+AssignmentId
+CandidateId
+QuestionId
+QuestionOrder
+IsMandatory
+AssignedBy
+CreatedAt
+
+This is where you decide which questions a candidate gets.
+
+Interviews
+Interviews
+-------------------------
+InterviewId
+CandidateId
+InterviewerId
+InterviewDate
+Status
+OverallScore
+OverallComments
+StartedAt
+CompletedAt
+CreatedAt
+
+Status:
+
+NOT_STARTED
+IN_PROGRESS
+COMPLETED
+CANCELLED
+InterviewAnswers
+InterviewAnswers
+-------------------------
+AnswerId
+InterviewId
+QuestionId
+CandidateAnswer
+InterviewerNotes
+Score
+IsAnswered
+AnsweredAt
+5. Your Common Questions
+
+The 10 MCQs should be stored in Questions.
+
+For example:
+
+QuestionCode: MCQ-001
+
+Question:
+A Python program calls an external API...
+
+Then options should be stored separately.
+
+I recommend another table:
+
+QuestionOptions
+QuestionOptions
+-------------------------
+OptionId
+QuestionId
+OptionLabel
+OptionText
+IsCorrect
+
+Example:
+
+QuestionId = 101
+
+A | Use exception handling and controlled retry | 1
+B | Restart the entire server               | 0
+C | Ignore the error                         | 0
+D | Keep calling continuously               | 0
+
+Important: IsCorrect and ExpectedAnswer must never be returned to the candidate API.
+
+6. Candidate-Specific Questions
+
+You already have three candidates:
+
+Kishore
+Nanthini
+Sunil
+
+You can have:
+
+Common Questions
+COMMON-01
+COMMON-02
+COMMON-03
+COMMON-04
+COMMON-05
+MCQ-01
+MCQ-02
+...
+MCQ-10
+
+Then candidate-specific questions:
+
+KISHORE-01
+KISHORE-02
+...
+NANTHINI-01
+NANTHINI-02
+...
+SUNIL-01
+SUNIL-02
+...
+
+The assignment table determines what appears during the interview.
+
+7. Recommended Project Structure
+
+I would create the project like this:
+
+interview-platform/
+│
+├── frontend/
+│   └── interview-ui/
+│
+├── services/
+│
+│   ├── auth-service/
+│   │   ├── config/
+│   │   │   ├── db.js
+│   │   │   └── env.js
+│   │   │
+│   │   ├── controllers/
+│   │   │   └── authController.js
+│   │   │
+│   │   ├── models/
+│   │   │   └── userModel.js
+│   │   │
+│   │   ├── routes/
+│   │   │   └── authRoutes.js
+│   │   │
+│   │   ├── middleware/
+│   │   │   └── authMiddleware.js
+│   │   │
+│   │   ├── utils/
+│   │   │   ├── jwt.js
+│   │   │   └── password.js
+│   │   │
+│   │   ├── .env
+│   │   ├── package.json
+│   │   └── server.js
+│   │
+│   └── interviewer-service/
+│       ├── config/
+│       │   └── db.js
+│       │
+│       ├── controllers/
+│       │   ├── candidateController.js
+│       │   ├── questionController.js
+│       │   ├── assignmentController.js
+│       │   └── interviewController.js
+│       │
+│       ├── models/
+│       │   ├── candidateModel.js
+│       │   ├── questionModel.js
+│       │   ├── assignmentModel.js
+│       │   └── interviewModel.js
+│       │
+│       ├── routes/
+│       │   ├── candidateRoutes.js
+│       │   ├── questionRoutes.js
+│       │   ├── assignmentRoutes.js
+│       │   └── interviewRoutes.js
+│       │
+│       ├── middleware/
+│       │   └── authMiddleware.js
+│       │
+│       ├── utils/
+│       │   ├── logger.js
+│       │   └── response.js
+│       │
+│       ├── .env
+│       ├── package.json
+│       └── server.js
+│
+└── database/
+    ├── 01_create_database.sql
+    ├── 02_create_tables.sql
+    └── 03_seed_questions.sql
+
+This matches your requirement for:
+
+model
+controller
+utils
+routes
+config
+8. Auth Service — Port 4000
+
+The Auth service should provide:
+
+POST /api/auth/login
+POST /api/auth/register
+GET  /api/auth/me
+
+Login flow:
+
+React
+  │
+  │ username/password
+  ▼
+Auth Service
+  │
+  ├── Find user
+  ├── Verify password
+  ├── Generate JWT
+  │
+  ▼
+React
+
+JWT payload:
+
+{
+  "userId": 12,
+  "role": "INTERVIEWER",
+  "name": "IT Interviewer"
+}
+
+React stores the token and sends:
+
+Authorization: Bearer <token>
+
+to the Interviewer service.
+
+9. Interviewer Service — Port 4001
+Candidate APIs
+GET    /api/candidates
+GET    /api/candidates/:id
+POST   /api/candidates
+PUT    /api/candidates/:id
+DELETE /api/candidates/:id
+Question APIs
+GET    /api/questions
+GET    /api/questions/:id
+POST   /api/questions
+PUT    /api/questions/:id
+DELETE /api/questions/:id
+Candidate Questions
+GET /api/candidates/:id/questions
+POST /api/candidates/:id/questions
+DELETE /api/candidates/:id/questions/:questionId
+Interview
+POST /api/interviews
+GET  /api/interviews/:id
+PUT  /api/interviews/:id/start
+PUT  /api/interviews/:id/complete
+Answers
+POST /api/interviews/:id/answers
+PUT  /api/interviews/:id/answers/:answerId
+10. React Application
+
+I would structure the frontend like this:
+
+src/
+│
+├── components/
+│   ├── common/
+│   ├── questions/
+│   ├── candidates/
+│   └── interview/
+│
+├── pages/
+│   ├── Login.jsx
+│   │
+│   ├── interviewer/
+│   │   ├── Dashboard.jsx
+│   │   ├── CandidateList.jsx
+│   │   ├── CandidateDetails.jsx
+│   │   ├── QuestionBank.jsx
+│   │   ├── CreateQuestion.jsx
+│   │   ├── EditQuestion.jsx
+│   │   └── InterviewScreen.jsx
+│   │
+│   └── candidate/
+│       ├── Dashboard.jsx
+│       └── Interview.jsx
+│
+├── services/
+│   ├── authService.js
+│   ├── candidateService.js
+│   ├── questionService.js
+│   └── interviewService.js
+│
+├── context/
+│   └── AuthContext.jsx
+│
+├── routes/
+│   └── AppRoutes.jsx
+│
+├── utils/
+│   └── api.js
+│
+├── App.jsx
+└── main.jsx
+11. Interviewer Screen
+
+This is the most important screen.
+
+I would make it something like:
+
+---------------------------------------------------------
+             TECHNICAL INTERVIEW SYSTEM
+---------------------------------------------------------
+
+Candidate:
+┌───────────────────────────────────────────────┐
+│ Kishore P                                  ▼ │
+└───────────────────────────────────────────────┘
+
+Position: Senior Engineer
+Status: IN PROGRESS
+
+---------------------------------------------------------
+Question 1 of 25
+---------------------------------------------------------
+
+"The business owner says:
+I need the dashboard to show the correct number..."
+
+[ Show Expected Answer ]
+
+Score:  [ 1 2 3 4 5 6 7 8 9 10 ]
+
+Interviewer Notes:
+┌───────────────────────────────────────────────┐
+│                                               │
+│                                               │
+└───────────────────────────────────────────────┘
+
+                 [ Previous ] [ Next ]
+
+---------------------------------------------------------
+
+But Show Expected Answer should only be visible to the interviewer.
+
+12. Candidate Screen
+
+The candidate should see:
+
+------------------------------------------------
+Technical Interview
+
+Question 1 / 25
+
+The business owner says:
+
+"I need the dashboard to show the
+correct number."
+
+What do you do before writing code?
+
+------------------------------------------------
+
+Your Answer:
+
+┌──────────────────────────────────────────────┐
+│                                              │
+│                                              │
+│                                              │
+└──────────────────────────────────────────────┘
+
+                       [ Submit Answer ]
+------------------------------------------------
+
+The candidate should never receive:
+
+ExpectedAnswer
+WeakAnswer
+IsCorrect
+InterviewerNotes
+Score
+
+from the backend.
+
+13. MCQ Screen
+
+For your 10 common MCQs:
+
+Question 1 / 10
+
+A Python program calls an external API.
+Sometimes the API is unavailable.
+What is the best approach?
+
+○ A. Use exception handling and controlled retry
+
+○ B. Restart the entire server
+
+○ C. Ignore the error
+
+○ D. Keep calling the API continuously
+
+                 [ Submit ]
+
+For the candidate API, return:
+
+{
+  "questionId": 101,
+  "questionText": "...",
+  "options": [
+    {
+      "id": 1,
+      "label": "A",
+      "text": "Use exception handling..."
+    },
+    {
+      "id": 2,
+      "label": "B",
+      "text": "Restart..."
+    }
+  ]
+}
+
+Do not return:
+
+"isCorrect": true
+
+The interviewer service can calculate the score after submission.
+
+14. Candidate Selection Flow
+
+The interviewer logs in.
+
+Login
+  ↓
+Interviewer Dashboard
+  ↓
+Candidate List
+  ↓
+Select Candidate
+  ↓
+Candidate Details
+  ↓
+Start Interview
+  ↓
+Load Assigned Questions
+  ↓
+Question 1
+  ↓
+Question 2
+  ↓
+...
+  ↓
+Complete Interview
+  ↓
+Final Score
+
+For example:
+
+Candidate: Kishore P
+
+Common Questions
+    ├── Common 01
+    ├── Common 02
+    ├── Common 03
+    ├── Common 04
+    └── Common 05
+
+Candidate Specific
+    ├── Kishore 01
+    ├── Kishore 02
+    ├── Kishore 03
+    └── Kishore 04
+
+MCQ
+    ├── MCQ 01
+    ├── MCQ 02
+    ...
+    └── MCQ 10
+15. Question Management
+
+The interviewer should have a Question Bank.
+
+Question Bank
+
+[ + Create Question ]
+
+--------------------------------------------------------------
+Code       Category       Difficulty    Type       Action
+--------------------------------------------------------------
+COM-001    Requirement    Medium        Oral       Edit
+COM-002    Architecture   Medium        Oral       Edit
+MCQ-001    Python         Easy          MCQ        Edit
+MCQ-002    PostgreSQL     Easy          MCQ        Edit
+KIS-001    RAG            Medium        Oral       Edit
+NAN-001    Deployment     Medium        Oral       Edit
+SUN-001    ML             Medium        Oral       Edit
+--------------------------------------------------------------
+
+Create Question:
+
+Question Type:
+
+( ) Oral
+( ) MCQ
+
+Question:
+[................................................]
+
+Category:
+[ PostgreSQL ▼ ]
+
+Difficulty:
+[ Medium ▼ ]
+
+Expected Answer:
+[................................................]
+
+Weak Answer:
+[................................................]
+
+Common Question:
+[ Yes / No ]
+
+                    [ Save ]
+16. Assignment Screen
+
+When interviewer selects a candidate:
+
+Candidate: Kishore P
+
+Available Questions
+
+☑ Common Question 1
+☑ Common Question 2
+☑ Common Question 3
+☑ Common Question 4
+☑ Common Question 5
+
+☑ MCQ 1
+☑ MCQ 2
+☑ MCQ 3
+...
+☑ MCQ 10
+
+☑ Kishore Question 1
+☑ Kishore Question 2
+☑ Kishore Question 3
+
+                     [ Save Assignment ]
+
+And allow drag/drop ordering:
+
+1. Common Q1
+2. Common Q2
+3. Common Q3
+4. Kishore Q1
+5. Kishore Q2
+6. MCQ1
+...
+
+This will make the application much more useful during the actual interview.
+
+17. SQL Server Configuration
+
+For your environment, the .env should be something like:
+
+PORT=4000
+
+DB_USER=sa
+DB_PASSWORD=your_password_here
+DB_HOST=VC-ITL-M031
+DB_DATABASE=CreateInterviewDB
+DB_INSTANCE_NAME=MEPZ_TEST_4_INST
+
+JWT_SECRET=your_long_random_secret
+JWT_EXPIRES_IN=8h
+
+For the second service:
+
+PORT=4001
+
+DB_USER=sa
+DB_PASSWORD=your_password_here
+DB_HOST=VC-ITL-M031
+DB_DATABASE=CreateInterviewDB
+DB_INSTANCE_NAME=MEPZ_TEST_4_INST
+
+JWT_SECRET=your_long_random_secret
+
+Do not put these values in React.
+
+18. Node.js Database Connection
+
+Since your database is SQL Server, I recommend the Node package:
+
+mssql
+
+Your database configuration can be:
+
+const sql = require("mssql");
+
+const config = {
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    server: process.env.DB_HOST,
+    database: process.env.DB_DATABASE,
+    options: {
+        encrypt: false,
+        trustServerCertificate: true,
+        instanceName: process.env.DB_INSTANCE_NAME
+    },
+    pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000
+    }
+};
+
+const poolPromise = new sql.ConnectionPool(config)
+    .connect()
+    .then(pool => {
+        console.log("Connected to SQL Server");
+        return pool;
+    })
+    .catch(err => {
+        console.error("Database connection failed:", err);
+        throw err;
+    });
+
+module.exports = {
+    sql,
+    poolPromise
+};
+
+If MEPZ_TEST_4_INST is a named SQL Server instance, we should verify the SQL Server Browser/network configuration when you run it.
+
+19. Example Controller
+
+For example:
+
+controllers/questionController.js
+const { sql, poolPromise } = require("../config/db");
+
+const getQuestions = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+
+        const result = await pool.request().query(`
+            SELECT
+                QuestionId,
+                QuestionCode,
+                QuestionText,
+                QuestionType,
+                Category,
+                Difficulty,
+                IsCommon,
+                IsActive
+            FROM Questions
+            WHERE IsActive = 1
+            ORDER BY CreatedAt DESC
+        `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to get questions"
+        });
+    }
+};
+
+module.exports = {
+    getQuestions
+};
+20. Route
+routes/questionRoutes.js
+const express = require("express");
+
+const router = express.Router();
+
+const {
+    getQuestions
+} = require("../controllers/questionController");
+
+router.get("/", getQuestions);
+
+module.exports = router;
+
+Then:
+
+app.use("/api/questions", questionRoutes);
+
+So the frontend calls:
+
+GET http://localhost:4001/api/questions
+21. Authentication Middleware
+
+The Interviewer service should not trust the React application.
+
+For example:
+
+React
+   ↓
+JWT
+   ↓
+Interviewer API
+   ↓
+JWT validation
+   ↓
+Check role
+   ↓
+Controller
+
+For question creation:
+
+POST /api/questions
+
+the service should verify:
+
+Is JWT valid?
+       ↓
+Is user logged in?
+       ↓
+Is role INTERVIEWER?
+       ↓
+Allow create
+
+A candidate should receive:
+
+403 Forbidden
+
+if they try to create a question.
+
+22. Very Important Security Rule
+
+Do not do this:
+
+if (user.role === "INTERVIEWER") {
+   // frontend allows button
+}
+
+and assume security is handled.
+
+The React UI can hide the button, but the API must enforce the permission.
+
+For example:
+
+Candidate
+   ↓
+POST /api/questions
+   ↓
+JWT validation
+   ↓
+Role = CANDIDATE
+   ↓
+403 Forbidden
+23. Interview Scoring
+
+Your existing technical form has:
+
+Oral
+
+10 criteria:
+
+Python Programming
+ML Concepts
+Deep Learning
+LLM & GenAI
+Prompt Engineering
+API Integration
+DSA
+Problem Solving
+System Design
+Communication
+
+Each:
+
+1–10
+Written
+
+5 criteria:
+
+Technical Accuracy
+Code Quality
+Logical Thinking
+Solution Approach
+Documentation/Explanation
+
+Each:
+
+1–10
+
+Your application can therefore maintain:
+
+Oral Score = /100
+
+Written Score = /50
+
+Technical Total = /150
+
+This is better than simply having one overall score.
+
+24. Interview Result Screen
+
+After completion:
+
+-------------------------------------------------------
+Candidate: Kishore P
+Position: Senior Engineer
+
+TECHNICAL INTERVIEW RESULT
+-------------------------------------------------------
+
+ORAL
+
+Python Programming             8 / 10
+ML Concepts                    8 / 10
+Deep Learning                  7 / 10
+LLM & GenAI                    9 / 10
+Prompt Engineering             8 / 10
+API Integration                8 / 10
+DSA                            7 / 10
+Problem Solving                9 / 10
+System Design                  7 / 10
+Communication                  8 / 10
+
+Oral Total                    79 / 100
+
+
+WRITTEN
+
+Technical Accuracy             8 / 10
+Code Quality                   8 / 10
+Logical Thinking               9 / 10
+Solution Approach              8 / 10
+Documentation                  7 / 10
+
+Written Total                 40 / 50
+
+-------------------------------------------------------
+
+TOTAL                         119 / 150
+
+Recommendation:
+[ Strong Hire ▼ ]
+
+Comments:
+[...................................................]
+
+              [ Complete Interview ]
+-------------------------------------------------------
+25. One Additional Table I Strongly Recommend
+
+Create:
+
+InterviewCriteriaScores
+
+Instead of hardcoding the criteria.
+
+InterviewCriteriaScores
+--------------------------------
+ScoreId
+InterviewId
+Category
+CriteriaName
+Score
+Comments
+CreatedAt
+
+Then you can change the assessment later without changing the application.
+
+For example:
+
+InterviewId | Category | Criteria
+------------------------------------------------
+101         | Oral     | Python Programming
+101         | Oral     | ML Concepts
+101         | Oral     | Deep Learning
+...
+101         | Written  | Technical Accuracy
+...
+26. Overall Architecture I Recommend for Your Version
+                    REACT
+                     │
+             ┌───────┴────────┐
+             │                │
+             ▼                ▼
+        AUTH SERVICE     INTERVIEWER SERVICE
+          :4000               :4001
+             │                │
+             │                │
+             └───────┬────────┘
+                     │
+                     ▼
+              SQL SERVER
+                     │
+             CreateInterviewDB
+                     │
+       ┌─────────────┼──────────────┐
+       │             │              │
+     Users       Candidates      Questions
+                                    │
+                                    ▼
+                         Question Options
+                                    │
+                                    ▼
+                       Candidate Assignments
+                                    │
+                                    ▼
+                              Interviews
+                                    │
+                                    ▼
+                           Interview Answers
+                                    │
+                                    ▼
+                           Interview Scores
+27. Development Order
+
+I would not start by building all screens. Build it in this order:
+
+Phase 1 — Database
+CreateInterviewDB
+    ↓
+Users
+Candidates
+Questions
+QuestionOptions
+CandidateQuestionAssignments
+Interviews
+InterviewAnswers
+InterviewCriteriaScores
+Phase 2 — Auth Service
+Login
+JWT
+Role
+Password hashing
+Authentication middleware
+Phase 3 — Interviewer Service
+Candidate CRUD
+Question CRUD
+Question assignment
+Interview creation
+Answer recording
+Scoring
+Phase 4 — React
+Login
+    ↓
+Interviewer Dashboard
+    ↓
+Candidate List
+    ↓
+Candidate Selection
+    ↓
+Question Assignment
+    ↓
+Interview Screen
+    ↓
+Scoring
+    ↓
+Final Result
+Phase 5 — Candidate Portal
+Candidate Login
+    ↓
+My Interview
+    ↓
+Questions
+    ↓
+Answers
+Phase 6 — Production Improvements
+Logging
+Error handling
+Audit trail
+Backup
+Role permissions
+Session timeout
+API validation
+Rate limiting
+Dashboard/reporting
+Docker
+Deployment
+My recommendation for your project
+
+Because this is an internal interview application, don't over-engineer it initially. Start with:
+
+React + Node.js/Express + SQL Server + JWT + two microservices
+
+auth-service       :4000
+interviewer-service:4001
+react              :5173
+SQL Server         : existing server
+
+That gives you the microservice separation you want while keeping the project manageable.

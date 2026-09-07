@@ -1,0 +1,18 @@
+{
+  "name": "interview-platform",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Technical Interview Platform - React + Node.js + SQL Server",
+  "scripts": {
+    "install:all": "npm install --prefix services/auth-service && npm install --prefix services/interviewer-service && npm install --prefix frontend/interview-ui",
+    "db:create": "sqlcmd -S . -U sa -P your_password_here -i database/01_create_database.sql",
+    "db:seed": "sqlcmd -S . -U sa -P your_password_here -i database/02_create_tables.sql -i database/03_seed_questions.sql",
+    "auth": "npm run dev --prefix services/auth-service",
+    "interviewer": "npm run dev --prefix services/interviewer-service",
+    "web": "npm run dev --prefix frontend/interview-ui",
+    "dev": "concurrently -n auth,interviewer,web -c blue,green,magenta \"npm run auth\" \"npm run interviewer\" \"npm run web\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
